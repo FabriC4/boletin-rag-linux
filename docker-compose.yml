@@ -1,0 +1,15 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: boletin_db
+    environment:
+      POSTGRES_DB: boletinDB
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+    ports:
+      - "5433:5432"
+    volumes:
+      - boletin_db_data:/var/lib/postgresql/data
+
+volumes:
+  boletin_db_data:
