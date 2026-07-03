@@ -1,190 +1,212 @@
-import json
-import re
-import unicodedata
 import urllib.request
-import numpy as np
+import json
+import psycopg2
+import psycopg2.extras
 from sentence_transformers import SentenceTransformer
 
-# ==========================================
-# CONFIGURACIÓN
-# ==========================================
-MODELO_OLLAMA = "gemma2:2b" 
+DB_CONFIG = {
+    "dbname": "boletinDB",
+    "user": "postgres",
+    "password": "1234",
+    "host": "127.0.0.1",
+    "port": "5433",
+    "options": "-c client_encoding=UTF8 -c lc_messages=C"
+}
 
-print("🧠 Cargando base de conocimiento en la memoria RAM...")
-with open("textos.json", "r", encoding="utf-8") as f:
-    textos_db = json.load(f)
+MODELO_OLLAMA = "llama3"
+MODELO_EMBEDDINGS = "paraphrase-multilingual-MiniLM-L12-v2"
 
-with open("mapeo_ids.json", "r", encoding="utf-8") as f:
-    mapeo_ids = json.load(f)
+TOP_K = 6
+MAX_TURNOS_MEMORIA = 3
 
-vectores_db = np.load("vectores.npy")
 
-print("⏳ Iniciando el modelo de embeddings en RAM...")
-model_embeddings = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+def conectar_db():
+    try:
+        return psycopg2.connect(**DB_CONFIG)
+    except UnicodeDecodeError as e:
+        print(f"⚠️ Postgres devolvió un error no legible (bytes: {e.object!r}).")
+        return None
+    except Exception as e:
+        print(f"⚠️ No se pudo conectar a Postgres ({e}).")
+        return None
 
-def normalizar_texto(texto):
-    """Limpia el texto quitando tildes, mayúsculas, guiones y signos de puntuación."""
-    texto = texto.lower()
-    texto = ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
-    texto = re.sub(r'[-_.,;:¡!¿?()"\']', ' ', texto)
-    return ' '.join(texto.split())
 
-def busqueda_hibrida(query, top_k=3):
-    """Busca en la RAM combinando vectores (semántica) y texto normalizado (literal)."""
-    query_limpia = normalizar_texto(query)
-    palabras_query = query_limpia.split()
+def buscar_nivel1_fulltext(cursor, pregunta, limite):
+    """Full-text search en español. Excluye páginas de sumario/índice (listan muchos
+    números de decreto de pasada y podrían ganarle en ranking al contenido real)."""
+    cursor.execute(
+        """
+        SELECT id, texto, nro_boletin, archivo, pagina, pagina_fin, tipo_extraccion,
+               ts_rank(texto_busqueda, plainto_tsquery('spanish', %s)) AS rank
+        FROM public.chunks
+        WHERE texto_busqueda @@ plainto_tsquery('spanish', %s)
+          AND NOT (texto ILIKE '%%SUMARIO%%' AND texto ILIKE '%%Decretos%%')
+        ORDER BY rank DESC
+        LIMIT %s;
+        """,
+        (pregunta, pregunta, limite)
+    )
+    return cursor.fetchall()
 
-    # Números exactos en la consulta (ej: "512" de "decreto 512").
-    # Son identificadores precisos: si el chunk los tiene como palabra exacta,
-    # es una señal mucho más fuerte que cualquier similitud semántica genérica.
-    numeros_query = [p for p in palabras_query if p.isdigit()]
 
-    query_vector = model_embeddings.encode(query, convert_to_numpy=True)
-    
-    norm_vectores = np.linalg.norm(vectores_db, axis=1)
-    norm_query = np.linalg.norm(query_vector)
-    norm_vectores[norm_vectores == 0] = 1e-9 
-    
-    similitudes_vectoriales = np.dot(vectores_db, query_vector) / (norm_vectores * norm_query)
-    
-    resultados = []
-    for idx, chunk_id in enumerate(mapeo_ids):
-        score_semantico = float(similitudes_vectoriales[idx])
-        texto_original = textos_db[chunk_id]["texto"]
-        texto_chunk_limpio = normalizar_texto(texto_original)
-        palabras_chunk = set(texto_chunk_limpio.split())
-        
-        score_literal = 0.0
-        if query_limpia in texto_chunk_limpio:
-            score_literal += 0.6
-        elif palabras_query:
-            coincidencias = sum(1 for palabra in palabras_query if palabra in texto_chunk_limpio)
-            score_literal += (coincidencias / len(palabras_query)) * 0.3
+def buscar_nivel2_semantico(cursor, modelo_embeddings, pregunta, limite, excluir_ids):
+    """Búsqueda vectorial con pgvector, para preguntas conceptuales que no comparten palabras exactas."""
+    vector = modelo_embeddings.encode(pregunta, convert_to_numpy=True).tolist()
+    if excluir_ids:
+        cursor.execute(
+            """
+            SELECT id, texto, nro_boletin, archivo, pagina, pagina_fin, tipo_extraccion,
+                   1 - (embedding <=> %s::vector) AS similitud
+            FROM public.chunks
+            WHERE embedding IS NOT NULL AND id != ALL(%s)
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s;
+            """,
+            (vector, list(excluir_ids), vector, limite)
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, texto, nro_boletin, archivo, pagina, pagina_fin, tipo_extraccion,
+                   1 - (embedding <=> %s::vector) AS similitud
+            FROM public.chunks
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s;
+            """,
+            (vector, vector, limite)
+        )
+    return cursor.fetchall()
 
-        # Boost fuerte por número exacto (palabra completa, no substring) presente en el chunk
-        score_numero = 0.0
 
-        if numeros_query:
-            numeros_encontrados = [n for n in numeros_query if n in palabras_chunk]
-            
-            if not numeros_encontrados:
-                continue
-
-            score_numero = (len(numeros_encontrados) / len(numeros_query)) * 2.0
-
-        score_final = score_semantico + score_literal + score_numero
-        
-        resultados.append({
-            "chunk_id": chunk_id,
-            "score": score_final,
-            "texto": texto_original,
-            "metadatos": textos_db[chunk_id]["metadatos"]
-        })
-        
-    resultados.sort(key=lambda x: x["score"], reverse=True)
-    return resultados[:top_k]
-
-def preguntar_a_ollama(pregunta, contexto):
-    """Envía el contexto estructurado y la pregunta a la API local de Ollama."""
-    url = "http://localhost:11434/api/generate"
-
-    prompt_sistema = f"""
-Sos un asistente experto en análisis de Boletines Oficiales.
-
-Tu tarea es responder utilizando ÚNICAMENTE la información contenida en los fragmentos del contexto.
-
-Reglas:
-1. Respondé de forma clara, precisa y formal.
-
-2. Si la pregunta pide identificar en qué boletines aparece una persona, nombre, decreto, ley o término:
-   - SOLO debés responder usando el campo "Boletín:" del contexto.
-   - Nunca uses números encontrados dentro del contenido como número de boletín.
-   - El número de boletín es únicamente el que aparece después de "Boletín:".
-   - No digas fragmentos.
-
-3. Si la pregunta pide explicar, resumir o detallar contenido:
-   - Respondé normalmente usando la información encontrada.
-
-4. Si no encontrás información:
-   - Respondé exactamente:
-   "No encontré información sobre ese tema en los boletines cargados."
-
-5. Nunca inventes datos.
-
-CONTEXTO:
-{contexto}
-
-PREGUNTA:
-{pregunta}
-
-RESPUESTA:
-"""
-
-    payload = {
-        "model": MODELO_OLLAMA,
-        "prompt": prompt_sistema,
-        "stream": False
+def fila_a_dict(fila):
+    return {
+        "id": fila[0], "texto": fila[1], "nro_boletin": fila[2], "archivo": fila[3],
+        "pagina": fila[4], "pagina_fin": fila[5], "tipo_extraccion": fila[6]
     }
 
+
+def buscar_fragmentos(cursor, modelo_embeddings, pregunta, top_k=TOP_K):
+    """Combina full-text + semántico, sin duplicar resultados."""
+    resultados = []
+    ids_usados = set()
+
+    for fila in buscar_nivel1_fulltext(cursor, pregunta, top_k):
+        resultados.append(fila_a_dict(fila))
+        ids_usados.add(fila[0])
+
+    if len(resultados) < top_k:
+        faltan = top_k - len(resultados)
+        for fila in buscar_nivel2_semantico(cursor, modelo_embeddings, pregunta, faltan, ids_usados):
+            resultados.append(fila_a_dict(fila))
+            ids_usados.add(fila[0])
+
+    return resultados
+
+
+def preguntar_a_ollama(pregunta, contexto, historial):
+    url = "http://localhost:11434/api/generate"
+
+    bloque_historial = ""
+    if historial:
+        turnos = "\n".join(f"Usuario: {h['pregunta']}\nAsistente: {h['respuesta']}" for h in historial)
+        bloque_historial = f"\nCONVERSACIÓN PREVIA (para dar contexto a preguntas de seguimiento):\n{turnos}\n"
+
+    prompt_sistema = f"""Sos un asistente experto en análisis de Boletines Oficiales.
+Tu tarea es responder la pregunta del usuario utilizando ÚNICAMENTE los fragmentos de los boletines oficiales provistos en el CONTEXTO.
+
+Reglas estrictas:
+1. Sé preciso, formal y cita textualmente si es necesario.
+2. Si en el contexto no figura la respuesta o no estás seguro, decí amablemente: "No encontré información sobre ese tema en los boletines cargados". No inventes nada.
+3. IMPORTANTE: cada PREGUNTA DEL USUARIO es un tema independiente y nuevo, salvo que use una referencia explícita a la conversación anterior (por ejemplo "y quién lo firmó?", "¿y ese decreto...?", "eso mismo pero..."). Si la pregunta actual no tiene ninguna palabra que la conecte con la conversación previa, IGNORÁ COMPLETAMENTE la conversación previa y respondé solo en base al CONTEXTO de boletines actual. No relaciones ni mezcles información de una pregunta anterior con la pregunta actual si no hay una conexión explícita.
+{bloque_historial}
+CONTEXTO DE LOS BOLETINES:
+{contexto}
+
+PREGUNTA DEL USUARIO:
+{pregunta}
+
+RESPUESTA:"""
+
+    payload = {"model": MODELO_OLLAMA, "prompt": prompt_sistema, "stream": False}
     headers = {'Content-Type': 'application/json'}
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode('utf-8'),
-        headers=headers
-    )
+    req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers)
 
     try:
-        with urllib.request.urlopen(req, timeout=300) as response:
+        with urllib.request.urlopen(req, timeout=60) as response:
             res_json = json.loads(response.read().decode('utf-8'))
             return res_json.get("response", "")
     except Exception as e:
         return f"\n❌ Error al conectar con Ollama ({e})."
 
-# ==========================================
-# BUCLE PRINCIPAL DEL CHAT
-# ==========================================
-print("\n🚀 ¡Buscador Híbrido Optimizado Listo!")
-print("Para salir, escribí 'salir'.\n")
 
-while True:
-    usuario_input = input("👤 Tu pregunta: ")
-    if usuario_input.strip().lower() == "salir":
-        print("¡Nos vemos!")
-        break
-        
-    if not usuario_input.strip():
-        continue
-        
-    print("🔍 Buscando...")
-    mejores_fragmentos = busqueda_hibrida(usuario_input, top_k=4)
+def main():
+    print("🔌 Conectando a la base de datos de Docker...")
+    conn = conectar_db()
+    if not conn:
+        print("❌ No se puede continuar sin conexión a la base.")
+        return
+    print("✅ Conectado a Postgres correctamente.")
+    cursor = conn.cursor()
 
-    print("\n🧪 DEBUG - Fragmentos recuperados:")
-    for r in mejores_fragmentos:
-        print(f"   score={r['score']:.3f} | boletin={r['metadatos'].get('nro_boletin')} | archivo={r['metadatos']['archivo']} | preview={r['texto'][:60]!r}")
-    print()
-    
-    contexto_bloque = ""
-    fuentes = []
-    
-    for i, res in enumerate(mejores_fragmentos):
-        meta = res["metadatos"]
-        nombre_archivo = meta['archivo']
-        
-        # --- MODIFICADO: El número de boletín ya viene guardado directamente en el JSON ---
-        nro_boletin = meta.get('nro_boletin', 'No mapeado')
-        
-        contexto_bloque += f""" --- Fragmento {i+1} --- Boletín: {nro_boletin} Página: {meta['pagina']} Archivo: {nombre_archivo}
-        Contenido:
-        {res['texto']}
+    print("⏳ Cargando el modelo de embeddings...")
+    modelo_embeddings = SentenceTransformer(MODELO_EMBEDDINGS)
 
-"""
-        fuentes.append(f"📌 [Fuente] Boletín Nro: {nro_boletin} | Archivo original: {nombre_archivo} | Página: {meta['pagina']}")
-        
-    respuesta_ia = preguntar_a_ollama(usuario_input, contexto_bloque)
-    
-    print("\n🤖 Respuesta de la IA:")
-    print(respuesta_ia)
-    print("\n📄 Documentación de respaldo utilizada:")
-    for f in fuentes:
-        print(f)
-    print("-" * 60 + "\n")
+    print("\n🚀 ¡Buscador Híbrido (Postgres + pgvector) Listo!")
+    print("Para salir, escribí 'salir'.\n")
+
+    historial = []
+
+    while True:
+        usuario_input = input("👤 Tu pregunta: ")
+        if usuario_input.strip().lower() == "salir":
+            print("¡Nos vemos!")
+            break
+        if not usuario_input.strip():
+            continue
+
+        print("🔍 Buscando...")
+        try:
+            fragmentos = buscar_fragmentos(cursor, modelo_embeddings, usuario_input)
+        except (psycopg2.InterfaceError, psycopg2.OperationalError):
+            print("⚠️ Se perdió la conexión. Reconectando...")
+            conn = conectar_db()
+            if not conn:
+                print("❌ No se pudo reconectar.")
+                break
+            cursor = conn.cursor()
+            continue
+
+        print("\n🧪 DEBUG - Fragmentos recuperados:")
+        for r in fragmentos:
+            rango_pag = f"{r['pagina']}" if r['pagina'] == r['pagina_fin'] else f"{r['pagina']}-{r['pagina_fin']}"
+            print(f"   boletin={r['nro_boletin']} | archivo={r['archivo']} | pag={rango_pag} | "
+                  f"tipo={r['tipo_extraccion']} | preview={r['texto'][:60]!r}")
+        print()
+
+        contexto_bloque = ""
+        fuentes = []
+        for i, r in enumerate(fragmentos):
+            contexto_bloque += f"--- Fragmento {i+1} (Boletín Nro: {r['nro_boletin']}) ---\n{r['texto']}\n\n"
+            rango_pag = f"{r['pagina']}" if r['pagina'] == r['pagina_fin'] else f"{r['pagina']}-{r['pagina_fin']}"
+            fuentes.append(
+                f"📌 [Fuente] Boletín Nro: {r['nro_boletin']} | Archivo: {r['archivo']} | Página: {rango_pag}"
+            )
+
+        respuesta_ia = preguntar_a_ollama(usuario_input, contexto_bloque, historial[-MAX_TURNOS_MEMORIA:])
+
+        print("\n🤖 Respuesta de la IA:")
+        print(respuesta_ia)
+        print("\n📄 Documentación de respaldo utilizada:")
+        for f in fuentes:
+            print(f)
+        print("-" * 60 + "\n")
+
+        historial.append({"pregunta": usuario_input, "respuesta": respuesta_ia})
+
+    cursor.close()
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()
