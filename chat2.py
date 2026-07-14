@@ -41,16 +41,16 @@ DB_CONFIG = {
 MODELO_OLLAMA = "qwen2.5"
 MODELO_EMBEDDINGS = "paraphrase-multilingual-MiniLM-L12-v2"
 
-TOP_K = 4  # bajado de 6: menos fragmentos = menos texto que procesar antes de generar
+TOP_K = 6  # bajado de 8: menos texto que Ollama tiene que "leer" antes de responder
 MAX_TURNOS_MEMORIA = 3
 
 # Ajustá NUM_THREAD_OLLAMA a tus núcleos físicos reales (nproc te dice los lógicos;
 # para inferencia, un valor cercano a los físicos suele andar mejor que el máximo).
 OLLAMA_OPTIONS = {
-    "num_ctx": 4096,       # bajado: menos contexto a "leer" antes de empezar a generar = arranca antes
-    "num_predict": 400,    # respuestas más cortas = termina antes (trade-off directo con "amplio")
-    "temperature": 0.3,
-    "num_thread": 18,      # núcleos FÍSICOS reales, no hilos lógicos (el hyperthreading no ayuda acá)
+    "num_ctx": 6144,      # contexto: TOP_K=6 fragmentos de ~1000 chars + historial + prompt entra cómodo
+    "num_predict": 700,   # tope de tokens de respuesta (subilo si necesitás respuestas más largas)
+    "temperature": 0.3,   # bajo = más apegado al contexto, menos alucinación
+    "num_thread": 40,     # igual al NUM_WORKERS que usás en preprocesar.py (núcleos físicos)
     "num_batch": 512,
 }
 

@@ -1,0 +1,37 @@
+2026-07-03 13:35:02,306 | Error procesando bo113550.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 13:35:02,338 | Error procesando bo10529.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 13:35:02,373 | Error procesando 14419.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 13:35:02,393 | Error procesando 144640.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 13:35:02,394 | Error procesando 14070.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 13:35:02,396 | Error procesando 14268pdf0.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 14:06:56,729 | Error procesando bo113550.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 14:06:56,750 | Error procesando 14419.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 14:06:56,759 | Error procesando bo10529.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 14:06:56,785 | Error procesando 14268pdf0.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 14:06:56,811 | Error procesando 144640.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 14:06:56,812 | Error procesando 14070.pdf: C:\Program Files\Tesseract-OCR\tesseract.exe is not installed or it's not in your PATH. See README file for more information.
+2026-07-03 14:13:10,388 | Error guardando 14419.pdf en la DB: column "entidades" of relation "chunks" does not exist
+LINE 4:              tipo_acto, numero_acto, entidades, tipo_extracc...
+                                             ^
+
+2026-07-03 14:13:16,158 | Error guardando 14070.pdf en la DB: column "entidades" of relation "chunks" does not exist
+LINE 4:              tipo_acto, numero_acto, entidades, tipo_extracc...
+                                             ^
+
+2026-07-03 14:13:33,296 | Error guardando 144640.pdf en la DB: column "entidades" of relation "chunks" does not exist
+LINE 4:              tipo_acto, numero_acto, entidades, tipo_extracc...
+                                             ^
+
+2026-07-03 14:14:17,172 | Error guardando 14268pdf0.pdf en la DB: column "entidades" of relation "chunks" does not exist
+LINE 4:              tipo_acto, numero_acto, entidades, tipo_extracc...
+                                             ^
+
+2026-07-03 14:14:54,682 | Error guardando bo10529.pdf en la DB: column "entidades" of relation "chunks" does not exist
+LINE 4:              tipo_acto, numero_acto, entidades, tipo_extracc...
+                                             ^
+
+2026-07-03 14:15:01,581 | Error guardando bo113550.pdf en la DB: column "entidades" of relation "chunks" does not exist
+LINE 4:              tipo_acto, numero_acto, entidades, tipo_extracc...
+                                             ^
+
+2026-07-07 16:01:15,795 | Error guardando sup12672.parte2.pdf en la DB: A string literal cannot contain NUL (0x00) characters.

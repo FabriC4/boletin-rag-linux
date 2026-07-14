@@ -1,4 +1,8 @@
 import os
+os.environ["OMP_THREAD_LIMIT"] = "1"  # Tesseract no debe paralelizar internamente:
+                                        # la paralelización la maneja multiprocessing.Pool.
+                                        # Sin esto, cada worker + su Tesseract interno compiten
+                                        # por los mismos núcleos y todo se hace más lento.
 import re
 import time
 import logging
@@ -10,8 +14,8 @@ import psycopg2
 import psycopg2.extras
 from multiprocessing import Pool, cpu_count
 
-# CONFIGURACIÓN DE TESSERACT EN WINDOWS
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# En Ubuntu, pytesseract encuentra el binario de tesseract solo (vía PATH del sistema),
+# no hace falta configurar tesseract_cmd como en Windows.
 
 DB_CONFIG = {
     "dbname": "boletinDB",
@@ -23,7 +27,11 @@ DB_CONFIG = {
 }
 
 CARPETA_BOLETINES = "./boletines"
-NUM_WORKERS = max(1, cpu_count() - 1)
+# Servidor: 2x Xeon Silver 4210R = 20 núcleos físicos / 40 hilos lógicos (hyperthreading).
+# Para OCR (CPU-bound), el hyperthreading casi no suma -> nos basamos en núcleos FÍSICOS,
+# no en cpu_count() (que cuenta hilos lógicos y sobreestimaría el paralelismo real).
+# Dejamos margen para Postgres, Ollama y el SO corriendo en la misma máquina.
+NUM_WORKERS = 18
 TAREAS_POR_WORKER_ANTES_DE_RECICLAR = 50
 
 TAMAÑO_CHUNK = 1000
@@ -77,11 +85,10 @@ def extraer_contenido_pdf(ruta_pdf):
 
         texto_ocr = ""
         if tiene_imagenes or not nativo_valido:
-            pix = pagina.get_pixmap(dpi=500)
-            imagen_bytes = pix.tobytes("png")
-            nparr = np.frombuffer(imagen_bytes, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            # Pedimos directamente escala de grises: evita el paso de comprimir a PNG
+            # y volver a decodificarlo con OpenCV (trabajo de CPU innecesario).
+            pix = pagina.get_pixmap(dpi=500, colorspace=fitz.csGRAY, alpha=False)
+            gris = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width)
             img_limpia = cv2.adaptiveThreshold(
                 gris, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 6
             )
