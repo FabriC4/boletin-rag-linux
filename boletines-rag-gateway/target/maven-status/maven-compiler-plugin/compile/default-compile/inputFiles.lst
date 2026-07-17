@@ -1,0 +1,11 @@
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\BoletinesRagGatewayApplication.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\config\RagClientConfig.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\controller\ConsultaController.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\dto\ConsultaRequest.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\dto\ConsultaResponse.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\dto\internal\RagServiceRequest.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\dto\internal\RagServiceResponse.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\exception\GlobalExceptionHandler.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\exception\RagServiceUnavailableException.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\security\ApiTokenFilter.java
+C:\Users\Centro de Cómputos\Desktop\Fabri\boletin-rag-nuevo\boletines-rag-gateway\src\main\java\ar\gov\misiones\ccpm\boletinesrag\service\RagQueryService.java
