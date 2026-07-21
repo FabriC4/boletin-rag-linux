@@ -107,9 +107,6 @@ CREATE TABLE public.chunks (
     creado_en TIMESTAMP DEFAULT now()
 );
 
-CREATE INDEX idx_chunks_nro_boletin ON public.chunks (nro_boletin);
-CREATE INDEX idx_chunks_tipo_numero ON public.chunks (tipo_acto, numero_acto);
-CREATE INDEX idx_chunks_entidades ON public.chunks USING GIN (entidades);
 CREATE INDEX idx_chunks_texto_busqueda ON public.chunks USING GIN (texto_busqueda);
 CREATE INDEX idx_chunks_embedding ON public.chunks USING hnsw (embedding vector_cosine_ops);
 CREATE UNIQUE INDEX idx_chunks_dedupe ON public.chunks (nro_boletin, pagina, fragmento_nro);
