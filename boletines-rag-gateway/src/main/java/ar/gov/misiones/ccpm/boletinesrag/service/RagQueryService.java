@@ -12,6 +12,12 @@ import org.springframework.web.client.RestClientException;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Traduce entre el contrato externo en inglés (question/answer/sources) y el
+ * contrato interno en español que espera el servicio Python (pregunta/respuesta/fuentes).
+ * El cambio de idioma queda contenido acá -- ni el cliente externo ni Python se enteran
+ * del otro lado.
+ */
 @Service
 public class RagQueryService {
 
@@ -22,11 +28,11 @@ public class RagQueryService {
     }
 
     public ConsultaResponse consultar(ConsultaRequest request) {
-        List<Map<String, String>> historialMapeado = request.historial().stream()
-                .map(t -> Map.of("pregunta", t.pregunta(), "respuesta", t.respuesta()))
+        List<Map<String, String>> historialMapeado = request.history().stream()
+                .map(t -> Map.of("pregunta", t.question(), "respuesta", t.answer()))
                 .toList();
 
-        RagServiceRequest requestInterno = new RagServiceRequest(request.pregunta(), historialMapeado);
+        RagServiceRequest requestInterno = new RagServiceRequest(request.question(), historialMapeado);
 
         RagServiceResponse respuestaInterna;
         try {
@@ -37,17 +43,17 @@ public class RagQueryService {
                     .body(RagServiceResponse.class);
         } catch (RestClientException e) {
             throw new RagServiceUnavailableException(
-                    "No se pudo obtener respuesta del servicio de boletines. Probá de nuevo en un momento.", e);
+                    "Could not get a response from the bulletins service. Try again in a moment.", e);
         }
 
         if (respuestaInterna == null) {
-            throw new RagServiceUnavailableException("El servicio de boletines devolvió una respuesta vacía.", null);
+            throw new RagServiceUnavailableException("The bulletins service returned an empty response.", null);
         }
 
-        List<ConsultaResponse.Fuente> fuentes = respuestaInterna.fuentes().stream()
-                .map(f -> new ConsultaResponse.Fuente(f.nroBoletin(), f.archivo(), f.pagina(), f.paginaFin()))
+        List<ConsultaResponse.Source> sources = respuestaInterna.fuentes().stream()
+                .map(f -> new ConsultaResponse.Source(f.nroBoletin(), f.archivo(), f.pagina(), f.paginaFin()))
                 .toList();
 
-        return new ConsultaResponse(respuestaInterna.respuesta(), fuentes);
+        return new ConsultaResponse(respuestaInterna.respuesta(), sources);
     }
 }

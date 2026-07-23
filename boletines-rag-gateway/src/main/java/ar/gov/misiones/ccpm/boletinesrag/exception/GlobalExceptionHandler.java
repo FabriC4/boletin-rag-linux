@@ -16,7 +16,7 @@ public class GlobalExceptionHandler {
         String mensaje = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
                 .map(err -> err.getDefaultMessage())
-                .orElse("Datos inválidos");
+                .orElse("Invalid data");
         return ResponseEntity.badRequest().body(Map.of("error", mensaje));
     }
 
@@ -27,6 +27,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> manejarGenerico(Exception ex) {
-        return ResponseEntity.internalServerError().body(Map.of("error", "Error interno inesperado."));
+        return ResponseEntity.internalServerError().body(Map.of("error", "Unexpected internal error."));
     }
 }

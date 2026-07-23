@@ -48,7 +48,7 @@ public class ApiTokenFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write("""
-                    {"error": "Token inválido o ausente. Mandá el header Authorization: Bearer <token>."}
+                    {"error": "Invalid or missing token. Send the header Authorization: Bearer <token>."}
                     """);
             return;
         }
