@@ -39,7 +39,7 @@ DB_CONFIG = {
     "options": "-c client_encoding=UTF8 -c lc_messages=C"
 }
 
-MODELO_OLLAMA = "qwen2.5:1.5b"
+MODELO_OLLAMA = "llama3.1"
 MODELO_EMBEDDINGS = "paraphrase-multilingual-MiniLM-L12-v2"
 TOP_K = 4
 MAX_TURNOS_MEMORIA = 3
