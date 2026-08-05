@@ -12,12 +12,6 @@ import org.springframework.web.client.RestClientException;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Traduce entre el contrato externo en inglés (question/answer/sources) y el
- * contrato interno en español que espera el servicio Python (pregunta/respuesta/fuentes).
- * El cambio de idioma queda contenido acá -- ni el cliente externo ni Python se enteran
- * del otro lado.
- */
 @Service
 public class RagQueryService {
 
@@ -27,7 +21,18 @@ public class RagQueryService {
         this.ragRestClient = ragRestClient;
     }
 
+    // Método para /api/consultar
     public ConsultaResponse consultar(ConsultaRequest request) {
+        return ejecutarPeticionInterna(request, "/consultar");
+    }
+
+    // Método para /api/consultabd
+    public ConsultaResponse consultarBD(ConsultaRequest request) {
+        // Llama al servicio de Python (mantiene /consultar si usan la misma API de FastAPI)
+        return ejecutarPeticionInterna(request, "/consultar");
+    }
+
+    private ConsultaResponse ejecutarPeticionInterna(ConsultaRequest request, String pathUri) {
         List<Map<String, String>> historialMapeado = request.history().stream()
                 .map(t -> Map.of("pregunta", t.question(), "respuesta", t.answer()))
                 .toList();
@@ -37,7 +42,7 @@ public class RagQueryService {
         RagServiceResponse respuestaInterna;
         try {
             respuestaInterna = ragRestClient.post()
-                    .uri("/consultar")
+                    .uri(pathUri)
                     .body(requestInterno)
                     .retrieve()
                     .body(RagServiceResponse.class);

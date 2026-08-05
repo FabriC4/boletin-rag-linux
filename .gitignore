@@ -4,4 +4,9 @@ textos.json
 vectores.npy
 chat_hecho_en_ccpm.py
 chat3.py
-boletinDB
+api_rag_grok.py
+__pycache__/
+*.pyc
+target/
+*.deb
+*.log

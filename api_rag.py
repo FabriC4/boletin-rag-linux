@@ -45,10 +45,10 @@ TOP_K = 4
 MAX_TURNOS_MEMORIA = 3
 
 OLLAMA_OPTIONS = {
-    "num_ctx": 4096,
+    "num_ctx": 16384,
     "num_predict": 400,
     "temperature": 0.3,
-    "num_thread": 20,
+    "num_thread": 16,
     "num_batch": 512,
 }
 
