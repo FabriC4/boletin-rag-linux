@@ -19,15 +19,8 @@ public class ConsultaController {
         this.ragQueryService = ragQueryService;
     }
 
-    // Endpoint 1 (Existente): http://10.10.0.126:8080/api/consultar
     @PostMapping("/consultar")
     public ConsultaResponse consultar(@Valid @RequestBody ConsultaRequest request) {
         return ragQueryService.consultar(request);
-    }
-
-    // Endpoint 2 (Nuevo): http://10.10.0.126:8080/api/consultabd
-    @PostMapping("/consultabd")
-    public ConsultaResponse consultarBD(@Valid @RequestBody ConsultaRequest request) {
-        return ragQueryService.consultarBD(request);
     }
 }
