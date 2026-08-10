@@ -8,7 +8,9 @@ public record ConsultaBdResponse(
 ) {
     public record Result(
             int bulletinNumber,
-            String file
+            String file,
+            String date,
+            String description
     ) {
     }
 }

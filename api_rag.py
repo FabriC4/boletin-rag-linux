@@ -39,16 +39,16 @@ DB_CONFIG = {
     "options": "-c client_encoding=UTF8 -c lc_messages=C"
 }
 
-MODELO_OLLAMA = "llama3.1"
+MODELO_OLLAMA = "qwen2.5:7b"
 MODELO_EMBEDDINGS = "paraphrase-multilingual-MiniLM-L12-v2"
 TOP_K = 4
 MAX_TURNOS_MEMORIA = 3
 
 OLLAMA_OPTIONS = {
     "num_ctx": 16384,
-    "num_predict": 400,
+    "num_predict": 1000,
     "temperature": 0.3,
-    "num_thread": 16,
+    "num_thread": 15,
     "num_batch": 512,
 }
 
@@ -60,7 +60,7 @@ PALABRAS_RELLENO = {
     "aparece", "aparecen", "aparezca",
     "dice", "dicen", "diga", "digan",
     "existe", "existen", "hay",
-    "sobre", "acerca", "informacion", "información", "info",
+    "sobre", "acerca", "informacion", "información", "info", "cuantos", "en cuantos"
 }
 
 # --- Estado global del proceso: se inicializa una sola vez en el startup ---
@@ -72,7 +72,6 @@ def limpiar_pregunta_para_busqueda(pregunta):
     palabras_limpias = [p for p in palabras if p not in PALABRAS_RELLENO]
     resultado = " ".join(palabras_limpias)
     return resultado if resultado.strip() else pregunta
-
 
 def conectar_db():
     try:
@@ -86,9 +85,9 @@ def buscar_nivel1_fulltext(cursor, pregunta, limite):
     cursor.execute(
         """
         SELECT id, texto, nro_boletin, archivo, pagina, pagina_fin, tipo_extraccion,
-               ts_rank(texto_busqueda, plainto_tsquery('spanish', %s)) AS rank
+               ts_rank(texto_busqueda, phraseto_tsquery('spanish', %s)) AS rank
         FROM public.chunks
-        WHERE texto_busqueda @@ plainto_tsquery('spanish', %s)
+        WHERE texto_busqueda @@ phraseto_tsquery('spanish', %s)
           AND NOT (texto ILIKE '%%SUMARIO%%' AND texto ILIKE '%%Decretos%%')
         ORDER BY rank DESC
         LIMIT %s;
@@ -96,7 +95,6 @@ def buscar_nivel1_fulltext(cursor, pregunta, limite):
         (pregunta, pregunta, limite)
     )
     return cursor.fetchall()
-
 
 def buscar_nivel1b_fulltext_flexible(cursor, pregunta, limite, excluir_ids):
     cursor.execute("SELECT plainto_tsquery('spanish', %s)::text;", (pregunta,))
@@ -170,21 +168,25 @@ def fila_a_dict(fila):
         "pagina": fila[4], "pagina_fin": fila[5], "tipo_extraccion": fila[6]
     }
 
-
 def buscar_fragmentos(cursor, modelo_embeddings, pregunta, top_k=TOP_K):
     resultados = []
     ids_usados = set()
     pregunta_limpia = limpiar_pregunta_para_busqueda(pregunta)
 
-    for fila in buscar_nivel1_fulltext(cursor, pregunta_limpia, top_k):
+    # Buscar coincidencia de frase exacta
+    filas_n1 = buscar_nivel1_fulltext(cursor, pregunta_limpia, top_k)
+    for fila in filas_n1:
         resultados.append(fila_a_dict(fila))
         ids_usados.add(fila[0])
 
-    if len(resultados) < top_k:
-        faltan = top_k - len(resultados)
-        for fila in buscar_nivel1b_fulltext_flexible(cursor, pregunta_limpia, faltan, ids_usados):
-            resultados.append(fila_a_dict(fila))
-            ids_usados.add(fila[0])
+    # SI HAY RESULTADOS EXACTOS, CORTAR AQUÍ
+    if resultados:
+        return resultados
+
+    # Solo si no hay coincidencia exacta de frase, buscar de forma flexible
+    for fila in buscar_nivel1b_fulltext_flexible(cursor, pregunta_limpia, top_k, ids_usados):
+        resultados.append(fila_a_dict(fila))
+        ids_usados.add(fila[0])
 
     if len(resultados) < top_k:
         faltan = top_k - len(resultados)
@@ -193,7 +195,6 @@ def buscar_fragmentos(cursor, modelo_embeddings, pregunta, top_k=TOP_K):
             ids_usados.add(fila[0])
 
     return resultados
-
 
 def preguntar_a_ollama(pregunta, contexto, historial):
     url = "http://localhost:11434/api/generate"
@@ -210,6 +211,8 @@ Reglas estrictas:
 1. Sé preciso, formal y cita textualmente si es necesario.
 2. Si en el contexto no figura la respuesta o no estás seguro, decí amablemente: "No encontré información sobre ese tema en los boletines cargados". No inventes nada.
 3. IMPORTANTE: cada PREGUNTA DEL USUARIO es un tema independiente y nuevo, salvo que use una referencia explícita a la conversación anterior. Si la pregunta actual no tiene ninguna palabra que la conecte con la conversación previa, IGNORÁ COMPLETAMENTE la conversación previa.
+4. Analiza el total de boletines en los cuales se encuentra la palabra buscada
+5. Al contar boletines, cuenta BOLETINES ÚNICOS (por número de boletín o archivo). No cuentes los fragmentos individuales como boletines distintos si pertenecen al mismo número de boletín. 
 {bloque_historial}
 CONTEXTO DE LOS BOLETINES:
 {contexto}
@@ -282,7 +285,6 @@ def consultar(body: ConsultaRequest):
     try:
         fragmentos = buscar_fragmentos(estado["cursor"], estado["modelo_embeddings"], body.pregunta)
     except (psycopg2.InterfaceError, psycopg2.OperationalError):
-        # Reconexión ante conexión caída, igual que en chat.py
         estado["conn"] = conectar_db()
         if estado["conn"] is None:
             raise HTTPException(status_code=503, detail="No se pudo reconectar a la base de datos.")
@@ -290,21 +292,27 @@ def consultar(body: ConsultaRequest):
         fragmentos = buscar_fragmentos(estado["cursor"], estado["modelo_embeddings"], body.pregunta)
 
     contexto_bloque = ""
-    fuentes = []
+    fuentes_dict = {}  # Usamos dict para evitar repetir el mismo boletin/pagina en sources
+
     for i, r in enumerate(fragmentos):
-        contexto_bloque += f"--- Fragmento {i+1} (Boletín Nro: {r['nro_boletin']}) ---\n{r['texto']}\n\n"
-        fuentes.append(Fuente(
-            nro_boletin=r["nro_boletin"], archivo=r["archivo"],
-            pagina=r["pagina"], pagina_fin=r["pagina_fin"]
-        ))
+        contexto_bloque += f"--- Fragmento {i+1} (Boletín Nro: {r['nro_boletin']}, Archivo: {r['archivo']}) ---\n{r['texto']}\n\n"
+        
+        # Clave única por boletín y página
+        clave = (r["nro_boletin"], r["pagina"])
+        if clave not in fuentes_dict:
+            fuentes_dict[clave] = Fuente(
+                nro_boletin=r["nro_boletin"], 
+                archivo=r["archivo"],
+                pagina=r["pagina"], 
+                pagina_fin=r["pagina_fin"]
+            )
 
     try:
         respuesta = preguntar_a_ollama(body.pregunta, contexto_bloque, body.historial[-MAX_TURNOS_MEMORIA:])
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    return ConsultaResponse(respuesta=respuesta, fuentes=fuentes)
-
+    return ConsultaResponse(respuesta=respuesta, fuentes=list(fuentes_dict.values()))
 
 @app.get("/salud")
 def salud():

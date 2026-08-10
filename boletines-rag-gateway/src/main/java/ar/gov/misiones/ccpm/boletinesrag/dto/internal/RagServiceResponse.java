@@ -16,6 +16,8 @@ public record RagServiceResponse(
     public record Fuente(
             @JsonProperty("nro_boletin") int nroBoletin,
             String archivo,
+            String fecha,
+            String descripcion,
             int pagina,
             @JsonProperty("pagina_fin") int paginaFin
     ) {

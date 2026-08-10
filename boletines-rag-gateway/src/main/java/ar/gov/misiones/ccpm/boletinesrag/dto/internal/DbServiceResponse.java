@@ -12,7 +12,9 @@ public record DbServiceResponse(
 ) {
     public record Fila(
             @JsonProperty("nro_boletin") int nroBoletin,
-            String archivo
+            String archivo,
+            String fecha,
+            String descripcion
     ) {
     }
 }
