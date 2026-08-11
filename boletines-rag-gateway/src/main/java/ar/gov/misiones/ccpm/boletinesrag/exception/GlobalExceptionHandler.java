@@ -2,6 +2,7 @@ package ar.gov.misiones.ccpm.boletinesrag.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -18,6 +19,12 @@ public class GlobalExceptionHandler {
                 .map(err -> err.getDefaultMessage())
                 .orElse("Invalid data");
         return ResponseEntity.badRequest().body(Map.of("error", mensaje));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> manejarBodyInvalido(HttpMessageNotReadableException ex) {
+        return ResponseEntity.badRequest().body(Map.of(
+                "error", "Malformed or unexpected request body. Check the field names match the API contract."));
     }
 
     @ExceptionHandler(RagServiceUnavailableException.class)

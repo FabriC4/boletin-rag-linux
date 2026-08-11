@@ -9,8 +9,6 @@ public record ConsultaResponse(
     public record Source(
             int bulletinNumber,
             String file,
-            String date,
-            String description
             int page,
             int pageEnd
     ) {

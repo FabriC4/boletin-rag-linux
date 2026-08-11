@@ -52,7 +52,7 @@ public class RagQueryService {
         }
 
         List<ConsultaResponse.Source> sources = respuestaInterna.fuentes().stream()
-                .map(f -> new ConsultaResponse.Source(f.nroBoletin(), f.archivo(), f.fecha(), f.descripcion(),  f.pagina(), f.paginaFin()))
+                .map(f -> new ConsultaResponse.Source(f.nroBoletin(), f.archivo(), f.pagina(), f.paginaFin()))
                 .toList();
 
         return new ConsultaResponse(respuestaInterna.respuesta(), sources);
