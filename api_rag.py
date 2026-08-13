@@ -39,15 +39,15 @@ DB_CONFIG = {
     "options": "-c client_encoding=UTF8 -c lc_messages=C"
 }
 
-MODELO_OLLAMA = "phi3.5"
+MODELO_OLLAMA = "qwen2.5:3b"
 MODELO_EMBEDDINGS = "paraphrase-multilingual-MiniLM-L12-v2"
 TOP_K = 4
 MAX_TURNOS_MEMORIA = 3
 
 OLLAMA_OPTIONS = {
-    "num_ctx": 16384,
-    "num_predict": 1000,
-    "temperature": 0.3,
+    "num_ctx": 4096,
+    "num_predict": 400,
+    "temperature": 0.1,
     "num_thread": 10,
     "num_batch": 512,
 }

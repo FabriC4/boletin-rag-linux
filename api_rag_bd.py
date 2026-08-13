@@ -49,7 +49,7 @@ async def search_boletines(request: DBSearchRequest, db: Session = Depends(get_d
     Full-text search directo sobre public.boletines (columna fts_vector),
     sin generar ninguna respuesta con Ollama -- solo trae qué boletines matchean.
     Usa phraseto_tsquery para requerir que las palabras aparezcan juntas y en
-    el orden exacto ingresado (por ejemplo, "GONZALEZ FACUNDO").
+    el orden exacto ingresado.
     """
     try:
         sql_statement = text("""
